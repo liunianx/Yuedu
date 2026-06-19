@@ -394,14 +394,17 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         var bookUrl: String
         var chapterIndex: Int
+        var chapterPos: Int
         if (context.request().method() == HttpMethod.POST) {
             // post 请求
             bookUrl = context.bodyAsJson.getString("url") ?: context.bodyAsJson.getJsonObject("searchBook").getString("bookUrl") ?: ""
             chapterIndex = context.bodyAsJson.getInteger("index", -1)
+            chapterPos = context.bodyAsJson.getInteger("pos", 0)
         } else {
             // get 请求
             bookUrl = context.queryParam("url").firstOrNull() ?: ""
             chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
+            chapterPos = context.queryParam("pos").firstOrNull()?.toIntOrNull() ?: 0
         }
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
@@ -423,9 +426,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         var chapterInfo = chapterList.get(chapterIndex)
         // 书架书籍保存阅读进度
-        saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace)
+        saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace, chapterPos)
         // 保存到 webdav
-        saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace)
+        saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace, chapterPos)
         return returnData.setData("")
     }
 
@@ -490,9 +493,9 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
                     chapterInfo = chapterList.get(chapterIndex)
                     // 书架书籍保存阅读进度
                     if (isInBookShelf && cache != 1) {
-                        saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace)
+                        saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace, bookInfo.durChapterPos)
                         // 保存到 webdav
-                        saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace)
+                        saveBookProgressToWebdav(bookInfo, chapterInfo, userNameSpace, bookInfo.durChapterPos)
                     }
                     chapterUrl = chapterInfo.url
                     if (chapterIndex + 1 < chapterList.size) {
@@ -1909,11 +1912,12 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         return null
     }
 
-    fun saveShelfBookProgress(book: Book, bookChapter: BookChapter, userNameSpace: String) {
+    fun saveShelfBookProgress(book: Book, bookChapter: BookChapter, userNameSpace: String, chapterPos: Int = 0) {
         editShelfBook(book, userNameSpace) { existBook ->
             existBook.durChapterIndex = bookChapter.index
             existBook.durChapterTitle = bookChapter.title
             existBook.durChapterTime = System.currentTimeMillis()
+            existBook.durChapterPos = chapterPos
 
             // logger.info("saveShelfBookProgress: {}", existBook)
 
@@ -2076,7 +2080,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
     }
 
-    suspend fun saveBookProgressToWebdav(book: Book, bookChapter: BookChapter, userNameSpace: String) {
+    suspend fun saveBookProgressToWebdav(book: Book, bookChapter: BookChapter, userNameSpace: String, chapterPos: Int = 0) {
         val userHome = getUserWebdavHome(userNameSpace)
         var bookProgressDir = File(userHome + File.separator + "bookProgress")
         if (!bookProgressDir.exists()) {
@@ -2090,7 +2094,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             "name" to book.name,
             "author" to book.author,
             "durChapterIndex" to bookChapter.index,
-            "durChapterPos" to 0,
+            "durChapterPos" to chapterPos,
             "durChapterTime" to System.currentTimeMillis(),
             "durChapterTitle" to bookChapter.title
         ), true))

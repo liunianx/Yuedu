@@ -565,8 +565,8 @@ export default {
     }
     this.$Lazyload.$on("loaded", this.lazyloadHandler);
   },
-  deactivated() {
-    this.saveBookProgress();
+    deactivated() {
+      this.saveBookProgress(true);
     this.startSavePosition = false;
     this.lastReadingBook = this.$store.getters.readingBook;
     this.timer && clearInterval(this.timer);
@@ -1477,17 +1477,62 @@ export default {
         });
       });
     },
-    saveBookProgress() {
-      return Axios.post(
-        this.api + "/saveBookProgress",
-        {
-          url: this.$store.getters.readingBook.bookUrl,
-          index: this.chapterIndex
-        },
-        {
-          silent: true
+    saveBookProgress(force) {
+      if (!force && !this.startSavePosition) {
+        return Promise.resolve();
+      }
+      let pos = 0;
+      if (this.isAudio) {
+        pos = this.$refs.bookContentRef
+          ? Math.floor(this.$refs.bookContentRef.currentTime || 0)
+          : 0;
+      } else if (this.isEpub || this.isCarToon) {
+        pos =
+          document.documentElement.scrollTop || document.body.scrollTop || 0;
+      } else if (this.currentParagraph) {
+        let currentChapter = this.currentParagraph;
+        while (
+          currentChapter &&
+          currentChapter.className &&
+          currentChapter.className.indexOf &&
+          currentChapter.className.indexOf("chapter-content") < 0
+        ) {
+          currentChapter = currentChapter.parentNode;
+          if (currentChapter === this.$refs.bookContentRef.$el) {
+            break;
+          }
         }
-      ).catch(() => {});
+        if (
+          currentChapter &&
+          currentChapter.querySelectorAll
+        ) {
+          const chapterContentPos =
+            currentChapter.innerText.indexOf(
+              this.currentParagraph.innerText
+            ) || 0;
+          const paragraphs = currentChapter.querySelectorAll("h3,p");
+          for (let i = 0; i < paragraphs.length; i++) {
+            const paragraph = paragraphs[i];
+            if (paragraph === this.currentParagraph) {
+              pos =
+                typeof paragraph.dataset.pos !== "undefined"
+                  ? +paragraph.dataset.pos
+                  : chapterContentPos;
+              break;
+            }
+          }
+        }
+      }
+      const payload = {
+        url: this.$store.getters.readingBook.bookUrl,
+        index: this.chapterIndex
+      };
+      if (pos) {
+        payload.pos = pos;
+      }
+      return Axios.post(this.api + "/saveBookProgress", payload, {
+        silent: true
+      }).catch(() => {});
     },
     toTop(interval) {
       if (this.$store.state.miniInterface) {
@@ -2579,9 +2624,12 @@ export default {
                   ].title;
                 }
               }
-              position = currentChapter.innerText.indexOf(
-                this.currentParagraph.innerText
-              );
+              position =
+                typeof this.currentParagraph.dataset.pos !== "undefined"
+                  ? +this.currentParagraph.dataset.pos
+                  : currentChapter.innerText.indexOf(
+                      this.currentParagraph.innerText
+                    );
             }
           }
         }
@@ -2604,19 +2652,71 @@ export default {
         if (this.error) {
           return;
         }
-        const lastPosition = getCache(
+        const cacheKey =
           "bookChapterProgress@" +
-            this.$store.getters.readingBook.name +
-            "_" +
-            this.$store.getters.readingBook.author
-        );
-        if (lastPosition && +lastPosition) {
+          this.$store.getters.readingBook.name +
+          "_" +
+          this.$store.getters.readingBook.author;
+        const readingBook = this.$store.getters.readingBook || {};
+        const bookUrl = readingBook.bookUrl;
+        const localPosition = getCache(cacheKey);
+        const applyPosition = (pos) => {
+          if (!pos) {
+            return;
+          }
           this.$nextTick(() => {
-            this.showPosition(+lastPosition, () => {
+            this.showPosition(+pos, () => {
               this.startSavePosition = true;
             });
           });
+        };
+
+        if (!bookUrl) {
+          applyPosition(localPosition);
+          return;
         }
+
+        Axios.get(this.api + "/getShelfBook", {
+          params: { url: bookUrl },
+          silent: true
+        })
+          .then((res) => {
+            const shelfBook =
+              res && res.data && res.data.isSuccess ? res.data.data : null;
+            if (!shelfBook) {
+              applyPosition(localPosition);
+              return;
+            }
+
+            const serverChapterIndex =
+              typeof shelfBook.durChapterIndex !== "undefined"
+                ? shelfBook.durChapterIndex
+                : null;
+            const serverChapterPos =
+              typeof shelfBook.durChapterPos !== "undefined"
+                ? shelfBook.durChapterPos
+                : null;
+
+            if (
+              serverChapterIndex != null &&
+              readingBook.index !== serverChapterIndex
+            ) {
+              const book = { ...readingBook };
+              book.index = serverChapterIndex;
+              this.$store.commit("setReadingBook", book);
+            }
+
+            if (serverChapterPos) {
+              setCache(cacheKey, serverChapterPos);
+              applyPosition(serverChapterPos);
+              return;
+            }
+
+            applyPosition(localPosition);
+          })
+          .catch(() => {
+            applyPosition(localPosition);
+          });
       };
       if (immediate) {
         handler();

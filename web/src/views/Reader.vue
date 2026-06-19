@@ -1527,9 +1527,7 @@ export default {
         url: this.$store.getters.readingBook.bookUrl,
         index: this.chapterIndex
       };
-      if (pos) {
-        payload.pos = pos;
-      }
+      payload.pos = pos || 0;
       return Axios.post(this.api + "/saveBookProgress", payload, {
         silent: true
       }).catch(() => {});
@@ -2721,15 +2719,15 @@ export default {
               book.index = serverChapterIndex;
               this.$store.commit("setReadingBook", book);
 
-              if (serverChapterPos) {
+              if (serverChapterPos != null) {
                 setCache(cacheKey, serverChapterPos);
               }
 
               // 加载新章节内容，等 showContent 后再跳转段落
               this.getContent(serverChapterIndex);
               this.$once("showContent", () => {
-                const pos = serverChapterPos || localPosition;
-                if (pos) {
+                const pos = serverChapterPos != null ? serverChapterPos : localPosition;
+                if (pos != null && pos !== 0) {
                   this.$nextTick(() => {
                     this.showPosition(+pos, () => {
                       this.startSavePosition = true;
@@ -2740,8 +2738,8 @@ export default {
               return;
             }
 
-            // 同章节：直接定位段落
-            if (serverChapterPos) {
+            // 同章节：直接定位段落（serverChapterPos 包括 0 都是有效值）
+            if (serverChapterPos != null) {
               setCache(cacheKey, serverChapterPos);
               applyPosition(serverChapterPos);
               return;

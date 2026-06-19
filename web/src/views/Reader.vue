@@ -2585,6 +2585,7 @@ export default {
           return;
         }
         let position = 0;
+        let shouldSyncToServer = false;
         if (this.isAudio) {
           position = this.$refs.bookContentRef
             ? this.$refs.bookContentRef.currentTime
@@ -2630,6 +2631,11 @@ export default {
                   : currentChapter.innerText.indexOf(
                       this.currentParagraph.innerText
                     );
+              // 段落位置变化超过 500 字符时，同步到服务器
+              const lastSyncedPos = this._lastSyncedPos || 0;
+              if (Math.abs(position - lastSyncedPos) > 500) {
+                shouldSyncToServer = true;
+              }
             }
           }
         }
@@ -2640,6 +2646,14 @@ export default {
             this.$store.getters.readingBook.author,
           position
         );
+        // 定期将段落位置同步到服务器（跨设备同步关键）
+        if (shouldSyncToServer) {
+          this._lastSyncedPos = position;
+          clearTimeout(this._syncProgressTimer);
+          this._syncProgressTimer = setTimeout(() => {
+            this.saveBookProgress();
+          }, 2000);
+        }
       } catch (error) {
         //
       }

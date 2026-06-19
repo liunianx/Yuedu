@@ -2733,6 +2733,9 @@ export default {
                       this.startSavePosition = true;
                     });
                   });
+                } else {
+                  // 切换章节后即使 pos=0 也要启用保存
+                  this.startSavePosition = true;
                 }
               });
               return;

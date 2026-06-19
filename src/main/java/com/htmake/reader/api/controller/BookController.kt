@@ -406,6 +406,7 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
             chapterIndex = context.queryParam("index").firstOrNull()?.toInt() ?: -1
             chapterPos = context.queryParam("pos").firstOrNull()?.toIntOrNull() ?: 0
         }
+        logger.info("saveBookProgress received: url={}, index={}, pos={}, body={}", bookUrl, chapterIndex, chapterPos, context.bodyAsJson)
         if (bookUrl.isNullOrEmpty()) {
             return returnData.setErrorMsg("请输入书籍链接")
         }

@@ -2697,15 +2697,36 @@ export default {
                 ? shelfBook.durChapterPos
                 : null;
 
-            if (
+            const needSwitchChapter =
               serverChapterIndex != null &&
-              readingBook.index !== serverChapterIndex
-            ) {
-              const book = { ...readingBook };
+              readingBook.index !== serverChapterIndex;
+
+            if (needSwitchChapter) {
+              // 章节不同：先切换章节、加载内容，再定位段落
+              const book = { ...this.$store.getters.readingBook };
               book.index = serverChapterIndex;
               this.$store.commit("setReadingBook", book);
+
+              if (serverChapterPos) {
+                setCache(cacheKey, serverChapterPos);
+              }
+
+              // 加载新章节内容，等 showContent 后再跳转段落
+              this.getContent(serverChapterIndex);
+              this.$once("showContent", () => {
+                const pos = serverChapterPos || localPosition;
+                if (pos) {
+                  this.$nextTick(() => {
+                    this.showPosition(+pos, () => {
+                      this.startSavePosition = true;
+                    });
+                  });
+                }
+              });
+              return;
             }
 
+            // 同章节：直接定位段落
             if (serverChapterPos) {
               setCache(cacheKey, serverChapterPos);
               applyPosition(serverChapterPos);

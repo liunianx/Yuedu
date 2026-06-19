@@ -1,0 +1,25 @@
+FROM amazoncorretto:8u332-alpine3.14-jre
+
+RUN apk add --no-cache ca-certificates tini tzdata && \
+    update-ca-certificates && \
+    rm -rf /var/cache/apk/*
+
+ENV TZ=Asia/Shanghai
+
+EXPOSE 8080
+ENTRYPOINT ["/sbin/tini", "--"]
+
+COPY docker-dist/reader-2.5.4.jar /app/bin/reader.jar
+
+# JVM 内存优化（适配 2G 内存服务器，总占用目标 < 400MB）
+# -Xms64m       初始堆 64MB
+# -Xmx200m      最大堆 200MB
+# -Xmn80m       年轻代 80MB
+# -XX:MetaspaceSize=40m   元空间初始 40MB
+# -XX:MaxMetaspaceSize=80m 元空间上限 80MB
+# -XX:MaxDirectMemorySize=24m 直接内存 24MB
+# -XX:+UseSerialGC   Serial GC（最省内存，适合小堆）
+# -XX:-TieredCompilation 减少 JIT 编译器内存
+ENV JAVA_OPTS="-Xms64m -Xmx200m -Xmn80m -XX:MetaspaceSize=40m -XX:MaxMetaspaceSize=80m -XX:MaxDirectMemorySize=24m -XX:+UseSerialGC -XX:-TieredCompilation -XX:ReservedCodeCacheSize=32m -XX:InitialCodeCacheSize=16m -Dfile.encoding=UTF-8"
+
+CMD java ${JAVA_OPTS} -jar /app/bin/reader.jar

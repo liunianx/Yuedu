@@ -1,58 +1,24 @@
 version: '3.8'
 
 services:
-  # ========== Reader 在线阅读服务（自定义构建版）==========
   reader:
-    build:
-      context: .
-      dockerfile: Dockerfile.source
+    image: reader:local
     container_name: reader
     restart: always
     ports:
-      - "4396:8080"   # 宿主端口:容器端口，宿主端口可自行修改
+      - "4396:8080"
     volumes:
-      - ./data/logs:/logs           # 日志目录
-      - ./data/storage:/storage     # 数据目录（书源、书架、进度等）
+      - ./data/logs:/logs
+      - ./data/storage:/storage
+    mem_limit: 400m
+    memswap_limit: 400m
+    oom_kill_disable: false
     environment:
       - TZ=Asia/Shanghai
       - SPRING_PROFILES_ACTIVE=prod
-      # 用户与书籍限制
       - READER_APP_USERLIMIT=50
       - READER_APP_USERBOOKLIMIT=200
-      # 缓存章节内容，提升阅读体验
       - READER_APP_CACHECHAPTERCONTENT=true
-      # 多用户模式配置
-      - READER_APP_SECURE=true             # 开启登录鉴权
-      - READER_APP_SECUREKEY=adminpwd      # 管理员密码（建议修改）
-      - READER_APP_INVITECODE=registercode # 注册邀请码（建议修改）
-      # 可选：远程 WebView 支持（需同时启用下方 readerwebview 服务）
-      # - READER_APP_REMOTEWEBVIEWAPI=http://readerwebview:8050
-    networks:
-      - reader_net
-
-  # ========== 远程 WebView（可选，按需启用）==========
-  # readerwebview:
-  #   image: hectorqin/remote-webview
-  #   container_name: readerwebview
-  #   restart: always
-  #   environment:
-  #     - TZ=Asia/Shanghai
-  #   networks:
-  #     - reader_net
-
-  # ========== 自动更新镜像（可选）==========
-  # watchtower:
-  #   image: containrrr/watchtower
-  #   container_name: watchtower
-  #   restart: always
-  #   environment:
-  #     - TZ=Asia/Shanghai
-  #   volumes:
-  #     - /var/run/docker.sock:/var/run/docker.sock
-  #   command: reader watchtower --cleanup --schedule "0 0 4 * * *"
-  #   networks:
-  #     - reader_net
-
-networks:
-  reader_net:
-    driver: bridge
+      - READER_APP_SECURE=true
+      - READER_APP_SECUREKEY=adminpwd
+      - READER_APP_INVITECODE=registercode

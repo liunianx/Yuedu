@@ -50,3 +50,7 @@ out
 /server/logs
 /server/storage
 /server/target
+# Docker local build
+docker-dist/
+data/
+docker-compose.yml.bak

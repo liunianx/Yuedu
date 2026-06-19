@@ -2,7 +2,7 @@ FROM node:lts-alpine3.14 AS build-web
 ADD . /app
 WORKDIR /app/web
 # Build web
-RUN yarn && yarn build
+RUN yarn install --ignore-engines && yarn build
 
 # Build jar
 FROM gradle:6.1.1-jdk8 AS build-env
@@ -17,23 +17,28 @@ RUN \
 FROM amazoncorretto:8u332-alpine3.14-jre
 # Install base packages
 RUN \
-    # apk update; \
-    # apk upgrade; \
-    # Add CA certs tini tzdata
     apk add --no-cache ca-certificates tini tzdata; \
     update-ca-certificates; \
-    # Clean APK cache
     rm -rf /var/cache/apk/*;
 
 # 时区
 ENV TZ=Asia/Shanghai
 
-#RUN ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
-#  && echo Asia/Shanghai > /etc/timdezone \
-#  && dpkg-reconfigure -f noninteractive tzdata
-
 EXPOSE 8080
 ENTRYPOINT ["/sbin/tini", "--"]
-# COPY --from=hengyunabc/arthas:latest /opt/arthas /opt/arthas
+
 COPY --from=build-env /app/build/libs/reader.jar /app/bin/reader.jar
-CMD ["java", "-jar", "/app/bin/reader.jar" ]
+
+# JVM 内存优化参数（适配 2G 内存服务器）
+# -Xms64m     初始堆 64MB
+# -Xmx256m    最大堆 256MB（与原版单用户模式一致）
+# -Xmn96m     年轻代 96MB
+# -XX:MetaspaceSize=48m  元空间初始 48MB
+# -XX:MaxMetaspaceSize=96m 元空间上限 96MB
+# -XX:MaxDirectMemorySize=32m 直接内存上限 32MB
+# -XX:+UseSerialGC 使用 Serial GC（最省内存）
+# -XX:-TieredCompilation 减少 JIT 编译器内存开销
+# -XX:+UseStringDeduplication 字符串去重（JDK8u20+）
+ENV JAVA_OPTS="-Xms64m -Xmx256m -Xmn96m -XX:MetaspaceSize=48m -XX:MaxMetaspaceSize=96m -XX:MaxDirectMemorySize=32m -XX:+UseSerialGC -XX:-TieredCompilation -Dfile.encoding=UTF-8"
+
+CMD java ${JAVA_OPTS} -jar /app/bin/reader.jar

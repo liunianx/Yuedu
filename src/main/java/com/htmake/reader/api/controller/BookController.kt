@@ -417,14 +417,22 @@ class BookController(coroutineContext: CoroutineContext): BaseController(corouti
         }
         var bookSource = getBookSourceStringBySourceURL(bookInfo.origin, userNameSpace)
 
-        if (!bookInfo.isLocalBook() && bookSource.isNullOrEmpty()) {
-            return returnData.setErrorMsg("未配置书源")
+        // 尝试获取章节信息用于保存完整进度
+        var chapterTitle = ""
+        try {
+            if (!bookInfo.isLocalBook() && !bookSource.isNullOrEmpty()) {
+                var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
+                if (chapterIndex in 0 until chapterList.size) {
+                    chapterTitle = chapterList.get(chapterIndex).title ?: ""
+                }
+            }
+        } catch (e: Exception) {
+            logger.warn("saveBookProgress: 获取章节列表失败: {}", e.message)
         }
-        var chapterList = getLocalChapterList(bookInfo, bookSource ?: "", false, userNameSpace)
-        if (chapterIndex >= chapterList.size) {
-            return returnData.setErrorMsg("章节不存在")
-        }
-        var chapterInfo = chapterList.get(chapterIndex)
+        // 构造 BookChapter 对象用于保存进度
+        var chapterInfo = BookChapter()
+        chapterInfo.index = chapterIndex
+        chapterInfo.title = chapterTitle.ifEmpty { "章节${chapterIndex + 1}" }
         // 书架书籍保存阅读进度
         saveShelfBookProgress(bookInfo, chapterInfo, userNameSpace, chapterPos)
         // 保存到 webdav
